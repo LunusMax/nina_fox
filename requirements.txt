@@ -1,13 +1,19 @@
-# RL algorithms
-gymnasium==0.29.1
-stable-baselines3[extra]==2.3.2
+# ============================================================
+# === Nina Project - Requirements
+# === Author: Lucio Nunes (Nina Project)
+# === Date: 2025-10-19
+# ============================================================
 
-# Numerics
-numpy>=1.24
+# --- Core Environment ---
+gymnasium>=0.29.0
+pygame>=2.6.0
+numpy>=1.26.0
 
-# 2d visualization
-pygame>=2.5.2
+# --- Reinforcement Learning ---
+stable-baselines3>=2.3.0
 
-# Record video
-imageio>=2.34
-imageio-ffmpeg>=0.4.9
+# --- Video Recording ---
+imageio[ffmpeg]>=2.34.0
+
+# --- Optional Utilities ---
+matplotlib>=3.8.0    # for plotting learning curves (optional)
