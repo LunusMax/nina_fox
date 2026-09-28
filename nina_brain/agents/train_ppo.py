@@ -13,12 +13,15 @@ Date: 2025-10-20
 # === Editable Parameters (easy to tweak)
 # ============================================================
 
+
 GRID_SIZE = 10              # Size of the environment grid
 TOTAL_TIMESTEPS = 20_000    # Number of training steps
 LEARNING_RATE = 3e-4        # PPO learning rate
 N_STEPS = 256               # PPO rollout length
 BATCH_SIZE = 64             # PPO batch size
 GAMMA = 0.99                # Discount factor
+
+VERSION = "v0.1"
 
 RENDER_DURING_TEST = True   # If True, renders Nina after training
 SAVE_VIDEO = True            # Record a single evaluation episode after training
@@ -130,7 +133,7 @@ if __name__ == "__main__":
             callback = TrainingRecorderCallback(
                 frame_interval=TRAIN_TIMELAPSE_INTERVAL,
                 fps=TRAIN_TIMELAPSE_FPS,
-                output_path="nina_logs/videos/nina_training_timelapse",
+                output_path=f"nina_logs/videos/nina_training_timelapse_{VERSION}",
                 verbose=1,
             )
         except Exception as e:
@@ -153,15 +156,18 @@ if __name__ == "__main__":
     # === Save trained model ===
     model_dir = "nina_logs/models"
     os.makedirs(model_dir, exist_ok=True)
-    model.save(os.path.join(model_dir, "nina_ppo_model"))
-    print("💾 Model saved in nina_logs/models/nina_ppo_model.zip")
+    model.save(os.path.join(model_dir, f"nina_ppo_model_{VERSION}"))
+    
+    model.save(model_path)
+    
+    print(f"💾 Model saved in {model_path}.zip")
 
     # === Record single evaluation episode (optional) ===
     if SAVE_VIDEO and record_episode is not None:
         video_dir = "nina_logs/videos"
         os.makedirs(video_dir, exist_ok=True)
         try:
-            record_episode(model, filename_base=os.path.join(video_dir, "nina_learning"))
+            record_episode(model, filename_base=os.path.join(video_dir, f"nina_learning_{VERSION}"))
         except Exception as e:
             print(f"⚠️ Could not record video: {e}")
 
