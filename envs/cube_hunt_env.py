@@ -15,6 +15,7 @@ Observation: [x_fox, y_fox, x_rabbit, y_rabbit]
 Actions: 0=up, 1=right, 2=down, 3=left
 """
 
+from pathlib import Path
 import numpy as np
 import pygame
 import gymnasium as gym
@@ -54,6 +55,7 @@ class CubeHuntEnv(gym.Env):
     def __init__(self, grid_size=GRID_SIZE, render_mode="human", random_start=RANDOM_START):
         """Initialize the environment."""
         super().__init__()
+
         self.grid_size = grid_size
         self.render_mode = render_mode
         self.random_start = random_start
@@ -72,9 +74,38 @@ class CubeHuntEnv(gym.Env):
         pygame.display.set_caption("NINA - Cube Hunt")
         self.clock = pygame.time.Clock()
 
+        # === Asset Paths ===
+        base_dir = Path(__file__).resolve().parents[1]
+        self.assets_dir = base_dir / "assets" / "sprites"
+
+        self.fox_sprite_path = self.assets_dir / "fox_top.png"
+        self.rabbit_sprite_path = self.assets_dir / "rabbit_top.png"
+
+        # === Load Sprites ===
+        self.fox_sprite = self._load_sprite(
+            self.fox_sprite_path,
+            (self.cell_size, self.cell_size)
+        )
+        rabbit_size = max(1, int(self.cell_size * 0.65))
+
+        self.rabbit_sprite = self._load_sprite(
+            self.rabbit_sprite_path,
+            (rabbit_size, rabbit_size)
+        )
+        
+
         # === Initial State ===
         self.fox_pos = np.array([0, 0])
         self.rabbit_pos = np.array([self.grid_size - 1, self.grid_size - 1])
+
+
+    def _load_sprite(self, path, size):
+        """Load and resize a sprite while preserving transparency."""
+        sprite = pygame.image.load(str(path)).convert_alpha()
+        sprite = pygame.transform.scale(sprite, size)
+
+        return sprite
+
 
     def reset(self, seed=None, options=None):
         """Reset the environment to its initial state."""
@@ -92,6 +123,7 @@ class CubeHuntEnv(gym.Env):
 
         obs = np.concatenate([self.fox_pos, self.rabbit_pos])
         return obs, {}
+
 
     def step(self, action):
         """Execute one action in the environment and return the new state."""
@@ -114,6 +146,7 @@ class CubeHuntEnv(gym.Env):
 
         return obs, reward, done, False, {}
 
+
     def render(self):
         """Render the current state of the environment."""
         self.screen.fill(BG_COLOR)
@@ -121,29 +154,31 @@ class CubeHuntEnv(gym.Env):
         # === Draw Grid ===
         for x in range(0, self.window_size + 1, self.cell_size):
             pygame.draw.line(self.screen, GRID_COLOR, (x, 0), (x, self.window_size), 1)
+
         for y in range(0, self.window_size + 1, self.cell_size):
             pygame.draw.line(self.screen, GRID_COLOR, (0, y), (self.window_size, y), 1)
 
-        # === Draw Rabbit ===
-        pygame.draw.rect(
-            self.screen,
-            RABBIT_COLOR,
-            (self.rabbit_pos[0] * self.cell_size,
-             self.rabbit_pos[1] * self.cell_size,
-             self.cell_size, self.cell_size)
+        # === Draw Rabbit (centered inside the cell) ===
+        rabbit_pixel_x = self.rabbit_pos[0] * self.cell_size
+        rabbit_pixel_y = self.rabbit_pos[1] * self.cell_size
+
+        rabbit_rect = self.rabbit_sprite.get_rect()
+        rabbit_rect.center = (
+            rabbit_pixel_x + self.cell_size // 2,
+            rabbit_pixel_y + self.cell_size // 2
         )
 
+        self.screen.blit(self.rabbit_sprite, rabbit_rect)
+
         # === Draw Nina ===
-        pygame.draw.rect(
-            self.screen,
-            FOX_COLOR,
-            (self.fox_pos[0] * self.cell_size,
-             self.fox_pos[1] * self.cell_size,
-             self.cell_size, self.cell_size)
-        )
+        fox_pixel_x = self.fox_pos[0] * self.cell_size
+        fox_pixel_y = self.fox_pos[1] * self.cell_size
+
+        self.screen.blit(self.fox_sprite, (fox_pixel_x, fox_pixel_y))
 
         pygame.display.flip()
         self.clock.tick(self.metadata["render_fps"])
+
 
     def close(self):
         """Close the environment and release pygame resources."""
