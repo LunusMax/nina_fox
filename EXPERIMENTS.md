@@ -35,15 +35,19 @@ This document records **what changed, why it changed, and what the experiment ac
 | Specification | Value |
 | --- | --- |
 | Identifier | `B` |
-| CPU | TBD |
-| GPU | TBD |
-| RAM | TBD |
-| Operating system | TBD |
-| Python | TBD |
-| PyTorch | TBD |
-| Stable-Baselines3 | TBD |
-| Gymnasium | TBD |
-| Notes | TBD |
+| CPU | AMD Ryzen 7 8700G (8 cores / 16 threads) |
+| GPU | NVIDIA GeForce RTX 5060 (8 GB VRAM) |
+| Integrated GPU | AMD Radeon 780M |
+| RAM | 64 GB (62 GiB usable) |
+| Operating system | Ubuntu 24.04.4 LTS |
+| Kernel | Linux 7.0.0-30-generic |
+| Python | 3.12.3 |
+| PyTorch | 2.14.0+cu130 |
+| Stable-Baselines3 | 2.9.0 |
+| Gymnasium | 1.3.0 |
+| NVIDIA Driver | 595.99.02 |
+| CUDA available | Yes |
+| Notes | PPO training device must be recorded per experiment. |
 
 ### Training-duration history
 
