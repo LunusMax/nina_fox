@@ -47,17 +47,7 @@ def record_episode(
     base_path = Path(filename_base)
     base_path.parent.mkdir(parents=True, exist_ok=True)
 
-    version = 1
-
-    while True:
-        filename = base_path.parent / (
-            f"{base_path.name}_v{version:02d}.mp4"
-        )
-
-        if not filename.exists():
-            break
-
-        version += 1
+    filename = base_path.with_suffix(".mp4")
 
     # === Create environment ===
     env = CubeHuntEnv(
