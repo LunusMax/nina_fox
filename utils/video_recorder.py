@@ -35,6 +35,7 @@ def record_episode(
     fps: int = DEFAULT_FPS,
     max_steps: int = MAX_STEPS,
     random_start: bool = False,
+    random_rabbit_start: bool = False,
 ):
     """
     Records one episode of Nina chasing the rabbit.
@@ -47,12 +48,13 @@ def record_episode(
     base_path = Path(filename_base)
     base_path.parent.mkdir(parents=True, exist_ok=True)
 
-    filename = base_path.with_suffix(".mp4")
+    filename = base_path.parent / f"{base_path.name}.mp4"
 
     # === Create environment ===
     env = CubeHuntEnv(
         grid_size=GRID_SIZE,
         random_start=random_start,
+        random_rabbit_start=random_rabbit_start,
     )
 
     frames = []

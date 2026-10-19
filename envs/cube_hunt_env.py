@@ -31,16 +31,17 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 # === Editable Parameters (easy to modify for experimentation)
 # ============================================================
 
-GRID_SIZE = 10            # Number of cells on each side of the grid
-WINDOW_SIZE = 400         # Window size in pixels
-BG_COLOR = (50, 120, 50)  # Background color (grass)
-GRID_COLOR = (70, 70, 70) # Grid line color
-FOX_COLOR = (255, 140, 0) # Nina's color
-RABBIT_COLOR = (0, 0, 0)  # Rabbit's color
-FPS = 5                   # Frames per second for rendering
-RANDOM_START = False      # If True, Nina and rabbit start in random positions
-STEP_PENALTY = -0.01      # Small penalty for each move
-CATCH_REWARD = 1.0        # Reward for catching the rabbit
+GRID_SIZE = 10               # Number of cells on each side of the grid
+WINDOW_SIZE = 400            # Window size in pixels
+BG_COLOR = (50, 120, 50)     # Background color (grass)
+GRID_COLOR = (70, 70, 70)    # Grid line color
+FOX_COLOR = (255, 140, 0)    # Nina's color
+RABBIT_COLOR = (0, 0, 0)     # Rabbit's color
+FPS = 5                      # Frames per second for rendering
+RANDOM_START = False         # If True, Nina and rabbit start in random positions
+RANDOM_RABBIT_START = False  # Randomize only rabbit's starting position
+STEP_PENALTY = -0.01         # Small penalty for each move
+CATCH_REWARD = 1.0           # Reward for catching the rabbit
 
 
 # ============================================================
@@ -52,14 +53,14 @@ class CubeHuntEnv(gym.Env):
     
     metadata = {"render_modes": ["human"], "render_fps": FPS}
 
-    def __init__(self, grid_size=GRID_SIZE, render_mode="human", random_start=RANDOM_START):
+    def __init__(self, grid_size=GRID_SIZE, render_mode="human", random_start=RANDOM_START, random_rabbit_start=RANDOM_RABBIT_START,):
         """Initialize the environment."""
         super().__init__()
 
         self.grid_size = grid_size
         self.render_mode = render_mode
         self.random_start = random_start
-
+        self.random_rabbit_start = random_rabbit_start
         # === Define Action and Observation Spaces ===
         self.action_space = spaces.Discrete(4)  # 0=up, 1=right, 2=down, 3=left
         low = np.array([0, 0, 0, 0], dtype=np.int32)
@@ -108,18 +109,33 @@ class CubeHuntEnv(gym.Env):
 
 
     def reset(self, seed=None, options=None):
-        """Reset the environment to its initial state."""
+        """Reset Nina and the rabbit to their starting positions."""
         super().reset(seed=seed)
 
+        # === Nina's Starting Position ===
         if self.random_start:
-            # Random starting positions (cannot overlap)
-            self.fox_pos = np.random.randint(0, self.grid_size, size=2)
-            self.rabbit_pos = np.random.randint(0, self.grid_size, size=2)
-            while np.array_equal(self.fox_pos, self.rabbit_pos):
-                self.rabbit_pos = np.random.randint(0, self.grid_size, size=2)
+            self.fox_pos = self.np_random.integers(
+                0, self.grid_size, size=2, dtype=np.int32
+            )
         else:
-            self.fox_pos = np.array([0, 0])
-            self.rabbit_pos = np.array([self.grid_size - 1, self.grid_size - 1])
+            self.fox_pos = np.array([0, 0], dtype=np.int32)
+
+        # === Rabbit's Starting Position ===
+        if self.random_start or self.random_rabbit_start:
+            self.rabbit_pos = self.np_random.integers(
+                0, self.grid_size, size=2, dtype=np.int32
+            )
+
+            # Nina and the rabbit cannot start in the same cell
+            while np.array_equal(self.fox_pos, self.rabbit_pos):
+                self.rabbit_pos = self.np_random.integers(
+                    0, self.grid_size, size=2, dtype=np.int32
+                )
+        else:
+            self.rabbit_pos = np.array(
+                [self.grid_size - 1, self.grid_size - 1],
+                dtype=np.int32
+            )
 
         obs = np.concatenate([self.fox_pos, self.rabbit_pos])
         return obs, {}

@@ -37,15 +37,16 @@ class TrainingRecorderCallback(BaseCallback):
     then compiles them into a single accelerated video at the end of training.
     """
 
+
     def __init__(self, frame_interval=FRAME_INTERVAL, fps=VIDEO_FPS, output_path=OUTPUT_PATH, verbose=1):
         super().__init__(verbose)
         self.frame_interval = frame_interval
         self.fps = fps
         self.output_path = output_path
         self.frames = []
-        self.version = 1
         pygame.font.init()
         self.font = pygame.font.SysFont("consolas", 18)
+
 
     def _on_step(self) -> bool:
         """
@@ -85,6 +86,7 @@ class TrainingRecorderCallback(BaseCallback):
 
         return True
 
+
     def _on_training_end(self) -> None:
         """
         Compiles all recorded frames into a single timelapse video
@@ -93,17 +95,22 @@ class TrainingRecorderCallback(BaseCallback):
         # === Ensure output directory exists ===
         os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
 
-        # === Determine next available version ===
-        while os.path.exists(f"{self.output_path}_v{self.version:02d}.mp4"):
-            self.version += 1
-        filename = f"{self.output_path}_v{self.version:02d}.mp4"
+        # === Build filename using experiment version ===
+        filename = f"{self.output_path}.mp4"
 
         # === Save the timelapse video ===
         if self.frames:
             print(f"🎞️ Saving training timelapse ({len(self.frames)} frames)...")
+
             try:
-                iio.imwrite(filename, self.frames, fps=self.fps, codec="libx264")
+                iio.imwrite(
+                    filename,
+                    self.frames,
+                    fps=self.fps,
+                    codec="libx264"
+                )
                 print(f"✅ Training timelapse saved as {filename}")
+
             except Exception as e:
                 print(f"⚠️ Could not write timelapse video: {e}")
         else:
