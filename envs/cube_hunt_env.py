@@ -152,6 +152,9 @@ class CubeHuntEnv(gym.Env):
             self.fox_pos - self.rabbit_pos
         ).sum()
 
+        # === Store Position Before Movement ===
+        old_pos = self.fox_pos.copy()
+
         # === Move Nina ===
         if action == 0:      # Up
             self.fox_pos[1] = max(0, self.fox_pos[1] - 1)
@@ -176,11 +179,21 @@ class CubeHuntEnv(gym.Env):
 
         # === Reward Calculation ===
         caught = np.array_equal(
-            self.fox_pos, self.rabbit_pos
+            self.fox_pos,
+            self.rabbit_pos
+        )
+
+        blocked = np.array_equal(
+            old_pos,
+            self.fox_pos
         )
 
         if caught:
             reward = CATCH_REWARD
+
+        elif blocked:
+            reward = -0.05
+
         else:
             distance_improvement = old_distance - new_distance
 
@@ -188,13 +201,13 @@ class CubeHuntEnv(gym.Env):
                 STEP_PENALTY
                 + 0.02 * distance_improvement
             )
-
+            
         # === Observation ===
         obs = np.concatenate([
             self.fox_pos,
             self.rabbit_pos
         ])
-        
+
         self.episode_steps += 1
 
         terminated = bool(caught)
