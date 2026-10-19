@@ -29,6 +29,8 @@ SAVE_TRAINING_VIDEO = True   # Record a timelapse of the training (AI Warehouse 
 TRAIN_TIMELAPSE_INTERVAL = 10  # Capture one frame every N training steps
 TRAIN_TIMELAPSE_FPS = 30       # FPS of the final timelapse video
 
+MACHINE_ID = "B" 
+
 
 # ============================================================
 # === Imports
@@ -137,7 +139,23 @@ if __name__ == "__main__":
 
     # === Train Nina ===
     print("🚀 Training NINA (PPO)...")
+
+    training_start = time.perf_counter()
+
     model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=callback)
+
+    training_seconds = time.perf_counter() - training_start
+
+    hours, remainder = divmod(int(training_seconds), 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    print(
+        f"⏱️ Training duration: "
+        f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    )
+    print(f"💻 Machine: {MACHINE_ID}")
+    print(f"🧠 PPO device: {model.device}")
+    print(f"📊 Actual timesteps: {model.num_timesteps}")
 
     # === Test trained agent ===
     obs, _ = env.reset()
@@ -177,7 +195,7 @@ if __name__ == "__main__":
         video_dir = "nina_logs/videos"
         os.makedirs(video_dir, exist_ok=True)
         try:
-            record_episode(model, filename_base=os.path.join(video_dir, f"nina_learning_{VERSION}"))
+            record_episode(model, filename_base=os.path.join(video_dir, f"nina_learning_{VERSION}"), random_rabbit_start=True,)
         except Exception as e:
             print(f"⚠️ Could not record video: {e}")
 

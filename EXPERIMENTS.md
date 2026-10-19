@@ -1,22 +1,82 @@
 # Nina Fox — Experiment Log
 
-This document records changes to Nina Fox's reinforcement-learning environment, training configuration, and evaluation results. Its purpose is to explain **what changed, why it changed, and what the experiment actually showed**.
-
-> **Documentation rule:** Separate *implemented changes*, *observed results*, and *planned experiments*. Do not mark an experiment as successful until its outcome has been measured.
+This document records **what changed, why it changed, and what the experiment actually showed**. Implemented changes, observed results, and future plans are kept separate. A demonstration video is not, by itself, a reliable performance metric.
 
 ## Experiment index
 
-| Version | Main change | Training steps | Status | Evidence / outcome |
+| Version | Main change | Requested training timesteps | Status | Observed outcome |
 | --- | --- | ---: | --- | --- |
-| `v0.1` | Fixed initial positions | 20,000 | Completed | Nina learned to reach the fixed rabbit position in the observed demonstration. |
-| `v0.2` | Random rabbit starting position at each reset; Nina starts at `(0, 0)` | 20,000 | Completed; unsuccessful evaluation | After training, deterministic evaluation failed to catch the rabbit within 500 steps. At `(0, 0)`, Nina chose `LEFT` repeatedly. |
-| `v0.2.1` | Reward shaping based on Manhattan-distance improvement | **To be defined** | **Proposed — not yet verified** | Hypothesis: denser reward feedback should help Nina learn to approach rabbits at varying positions. |
+| `v0.1` | Fixed starting positions | 20,000 | Completed | Nina reached the fixed rabbit position in the observed demonstration. |
+| `v0.2` | Random rabbit starting position; Nina fixed at `(0, 0)` | 20,000 | Completed; unsuccessful evaluation | Nina repeatedly chose `LEFT` at `(0, 0)` and did not capture the rabbit. |
+| `v0.2.1` | Manhattan-distance reward shaping | **To verify** | Executed; unsuccessful evaluation | Nina moved right across the top row, became stuck at `(9, 0)`, and did not capture the rabbit within 500 steps. |
+| `v0.3` | Limit episodes; evaluate systematically; improve training protocol | TBD | **Planned** | Not tested. |
+
+---
+
+## Machines and training time
+
+### Machine A
+
+| Specification | Value |
+| --- | --- |
+| Identifier | `A` |
+| CPU | TBD |
+| GPU | TBD |
+| RAM | TBD |
+| Operating system | TBD |
+| Python | TBD |
+| PyTorch | TBD |
+| Stable-Baselines3 | TBD |
+| Gymnasium | TBD |
+| Notes | TBD |
+
+### Machine B
+
+| Specification | Value |
+| --- | --- |
+| Identifier | `B` |
+| CPU | TBD |
+| GPU | TBD |
+| RAM | TBD |
+| Operating system | TBD |
+| Python | TBD |
+| PyTorch | TBD |
+| Stable-Baselines3 | TBD |
+| Gymnasium | TBD |
+| Notes | TBD |
+
+### Training-duration history
+
+| Version | Machine | Training time | Device used by PPO | Measurement notes |
+| --- | --- | --- | --- | --- |
+| `v0.1` | Not recorded | Not recorded | Not recorded | Historical run; do not estimate retrospectively. |
+| `v0.2` | Not recorded | Not recorded | Not recorded | Historical run; do not estimate retrospectively. |
+| `v0.2.1` | Not recorded | Not recorded | Not recorded | Run finished, but wall-clock duration was not measured. |
+| `v0.3` | TBD (`A` or `B`) | TBD | TBD | Start automatic measurement here. |
+
+**Timing protocol:** measure the wall-clock duration of `model.learn()` using `time.perf_counter()`. This includes training callbacks, rendering/capture overhead, and saving the timelapse in `_on_training_end()`. It **does not** include the later test, model save, or evaluation video. Record the exact code commit, requested timesteps, effective timesteps (`model.num_timesteps`), chosen machine (`A`/`B`), PPO device, and random seed for each run. Durations measured on different machines should **not** be used to claim algorithmic speed improvements without a controlled benchmark.
+
+**Hardware collection (run separately on machines A and B):**
+
+```bash
+lscpu | grep 'Model name'
+free -h
+nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+python3 --version
+python3 - <<'PY'
+import torch, stable_baselines3, gymnasium
+print('PyTorch:', torch.__version__)
+print('Stable-Baselines3:', stable_baselines3.__version__)
+print('Gymnasium:', gymnasium.__version__)
+PY
+```
 
 ---
 
 ## v0.1 — Fixed-target baseline
 
-**Status:** Completed  
+**Status:** Completed.
+
 **Goal:** Establish that PPO can learn navigation in the simplest environment.
 
 ### Environment
@@ -30,222 +90,218 @@ This document records changes to Nina Fox's reinforcement-learning environment, 
 
 ### Training
 
-- Algorithm: PPO (`MlpPolicy`).
-- Total timesteps: `20,000`.
+- Algorithm / policy: PPO / `MlpPolicy`.
+- Requested timesteps: `20,000`.
 - Learning rate: `3e-4`.
-- Rollout length (`n_steps`): `256`.
+- PPO rollout length (`n_steps`): `256`.
 - Batch size: `64`.
 - Discount factor (`gamma`): `0.99`.
+- Machine and duration: **not recorded**.
 
 ### Observation
 
-Nina was observed learning to reach the rabbit at its fixed position. This baseline does **not** demonstrate generalization to other rabbit locations; a fixed sequence of moves can solve the task.
+Nina was observed reaching the rabbit at its fixed position. This does **not** demonstrate generalization: a fixed sequence of actions could solve this version.
 
 ### Artifacts
 
-- Model: `nina_logs/models/nina_ppo_model_v0.1` (the observed stored filename; may differ if later saved with `.zip`).
-- Episode video: `nina_logs/videos/nina_learning_v0.1.mp4` (desired naming convention; confirm the local artifact).
-
-### Lesson
-
-The environment and PPO training loop can support learning a fixed-target task. The next experiment must test whether the learned policy uses the rabbit's coordinates rather than memorizing one route.
+- Model: `nina_logs/models/nina_ppo_model_v0.1` (historical filename; may later be renamed with `.zip`).
+- Evaluation video: see the stored artifact for this version (historical filenames may differ).
 
 ---
 
 ## v0.2 — Random initial rabbit position
 
-**Status:** Implemented and tested; deterministic evaluation failed  
-**Goal:** Test whether Nina can learn to approach a rabbit placed at different coordinates.
+**Status:** Implemented and evaluated; observed failure.
 
-### Change
+**Goal:** Test whether Nina learns a policy conditioned on the rabbit's coordinates.
 
-- At each episode reset, keep Nina at `(0, 0)`.
-- Sample a new rabbit position, different from Nina's position.
-- Keep the rabbit stationary during the episode.
-- Preserve the sparse reward: `+1.0` for capture and `-0.01` otherwise.
-- Keep PPO training at `20,000` timesteps for an initial comparison with `v0.1`.
+### Changes
 
-**Relevant files:**
+- At each `reset()`, keep Nina at `(0, 0)`.
+- Randomize the rabbit's initial position, excluding Nina's cell.
+- Keep the rabbit stationary during an episode.
+- Preserve sparse reward: `+1.0` on capture and `-0.01` otherwise.
+- Requested training timesteps: `20,000`.
+- Machine and duration: **not recorded**.
 
-- `envs/cube_hunt_env.py` — rabbit initialization in `reset()`.
-- `nina_brain/agents/train_ppo.py` — experiment version and environment configuration.
-- `utils/video_recorder.py` — match recording conditions to training conditions.
+**Relevant files:** `envs/cube_hunt_env.py`, `nina_brain/agents/train_ppo.py`, `utils/video_recorder.py`.
 
-### Observed results
+### Observations
 
-- Training generated a timelapse containing **2,022 captured frames**.
-- The post-training evaluation reported: `Nina did not catch the rabbit within the step limit` (`500` steps).
-- The recorded evaluation showed Nina remaining at `(0, 0)`.
-- A separate deterministic 10-action test at `(0, 0)` produced `LEFT` on **all 10 steps**, leaving Nina at `(0, 0)` throughout.
-- During the video inspection, the rabbit was at `(9, 9)`. **Check that the evaluation recorder actually received the randomized-rabbit setting**; the fixed target in the video alone cannot establish a recorder bug.
+- The timelapse contained `2,022` recorded frames.
+- Post-training test: failed to catch the rabbit within `500` steps.
+- Deterministic 10-step test: `LEFT` on all 10 steps, remaining at `(0, 0)`.
+- The evaluated policy stalled at the left boundary, where repeated invalid moves left observations unchanged.
 
 ### Interpretation
 
-The evaluation policy became stuck at the left boundary. Because invalid moves do not change the observation, a deterministic policy that keeps selecting `LEFT` receives the same input each step and repeats the action.
-
-A likely contributor is **sparse reward feedback**: moving closer, moving farther, and hitting a wall all produce `-0.01` until capture. This is a hypothesis about *why learning failed*, not yet an experimentally isolated cause.
-
-### Next action
-
-Change the reward signal in a separate experiment (`v0.2.1`), retain a reproducible evaluation protocol, and measure the capture rate across many randomized episodes.
+Sparse rewards may contribute to failure: approaching, retreating, and pressing against a boundary all result in `-0.01` until capture. This is a hypothesis, **not an isolated causal result**.
 
 ---
 
 ## v0.2.1 — Manhattan-distance reward shaping
 
-**Status:** **PROPOSED — do not label as implemented until code is changed and executed**  
-**Goal:** Give the agent immediate feedback for approaching the rabbit.
+**Status:** Executed; unsuccessful single-episode evaluation.
 
-### Hypothesis
+**Goal:** Provide feedback for moving toward the rabbit rather than solely rewarding capture.
 
-Adding a small reward for reducing the Manhattan distance to the rabbit may reduce the tendency to learn ineffective actions, including repeatedly moving into a boundary.
+### Reward change
 
-### Proposed modification
-
-File: `envs/cube_hunt_env.py`, method: `step()`.
-
-Define the Manhattan distance:
+The Manhattan distance is
 
 \[
-D(s) = |x_{fox} - x_{rabbit}| + |y_{fox} - y_{rabbit}|
+D(s)=|x_{fox}-x_{rabbit}|+|y_{fox}-y_{rabbit}|.
 \]
 
-For a nonterminal step, calculate:
+For nonterminal steps:
 
 \[
-r = -0.01 + 0.02\left(D_{before} - D_{after}\right)
+r=-0.01+0.02\left(D_{before}-D_{after}\right).
 \]
 
-Keep the capture reward at `+1.0`.
+Capture remains worth `+1.0`.
 
-```python
-old_distance = np.abs(self.fox_pos - self.rabbit_pos).sum()
-
-# Apply Nina's selected movement here.
-
-new_distance = np.abs(self.fox_pos - self.rabbit_pos).sum()
-caught = np.array_equal(self.fox_pos, self.rabbit_pos)
-
-if caught:
-    reward = CATCH_REWARD
-else:
-    distance_improvement = old_distance - new_distance
-    reward = STEP_PENALTY + 0.02 * distance_improvement
-```
-
-Expected immediate rewards:
-
-| Action outcome | Reward |
+| Movement outcome | Immediate reward |
 | --- | ---: |
-| One cell closer to rabbit (without capture) | `+0.01` |
-| No change in distance (e.g., blocked by wall) | `-0.01` |
-| One cell farther from rabbit | `-0.03` |
+| One cell closer (without capture) | `+0.01` |
+| Blocked by a wall | `-0.01` |
+| One cell farther away | `-0.03` |
 | Capture | `+1.00` |
 
-> **Research note:** This shaping rule changes the reward function. With `gamma = 0.99`, it is not exactly the same as discount-consistent potential-based shaping, so preserving the original task's optimal policy is **not guaranteed**. We should report it explicitly as a reward-design change.
+**Research note:** With `gamma=0.99`, this is not exactly discount-consistent potential-based shaping; preserving the original optimal policy is not guaranteed. Record it as a change to reward design.
 
-### Experiment controls
+### Training configuration
 
-To isolate the effect of reward shaping, **first keep `TOTAL_TIMESTEPS = 20_000`**, with the same grid, PPO hyperparameters, and environment initialization as `v0.2`. If learning is still insufficient, test `100_000` steps as a **separate** experiment (for example, `v0.2.2`) so training duration does not confound the comparison.
+- Algorithm / policy: PPO / `MlpPolicy`.
+- Requested timesteps: **confirm from the script or training log used for this run**.
+- Machine and duration: **not recorded**.
+- Effective training timesteps: **not explicitly logged**.
+- **Consistency check:** with `TRAIN_TIMELAPSE_INTERVAL=10`, `2,022` captured frames correspond to approximately `20,220` training steps. PPO's `n_steps=256` and a request for 20,000 steps would normally produce `20,224` effective steps. This is **consistent with a 20,000-step run**, not a 100,000-step run; confirm that the interval was unchanged in the executed configuration.
 
-Proposed training configuration:
+### Observed results
 
-```python
-VERSION = "v0.2.1"
-TOTAL_TIMESTEPS = 20_000
+Terminal output:
+
+```text
+🎞️ Saving training timelapse (2022 frames)...
+✅ Training timelapse saved as nina_logs/videos/nina_training_timelapse_v0.2.1.mp4
+⚠️ Nina did not catch the rabbit within the step limit.
+💾 Model saved in nina_logs/models/nina_ppo_model_v0.2.1.zip
+🎬 Starting video recording (nina_logs/videos/nina_learning_v0.2.1.mp4) ...
+⏱️ Recording ended before capture.
+🎥 Recording 500 frames...
+✅ Video saved as nina_logs/videos/nina_learning_v0.2.1.mp4
+✅ Training complete.
 ```
 
-### Evaluation protocol (to run)
+Video inspection: Nina moved from `(0, 0)` to `(9, 0)` along the top edge, then remained stuck at the right boundary. The rabbit appeared near `(9, 7)` and was not caught during the 500-frame recording. This differs from v0.2's `LEFT`-at-origin failure, but does **not** establish robust learning.
 
-Evaluate the saved model over **100 episodes** with distinct seeded rabbit positions and `deterministic=True`. Report:
+### Artifacts
 
-- **Capture rate:** successful episodes / 100.
-- **Mean steps to capture:** calculated for successful episodes only, with the denominator stated.
-- **Mean episode return:** average sum of rewards per episode.
-- **Boundary-stall count:** number of episodes with repeated blocked moves.
-- **Seed(s):** to make outcomes reproducible.
+- Model: `nina_logs/models/nina_ppo_model_v0.2.1.zip`.
+- Evaluation episode: `nina_logs/videos/nina_learning_v0.2.1.mp4`.
+- Training timelapse: `nina_logs/videos/nina_training_timelapse_v0.2.1.mp4`.
+- Mean reward, capture rate over multiple episodes, random seeds, and training duration: **not recorded**.
 
-Use a finite time limit in the environment (or explicitly cap evaluation steps) so failure episodes are recorded consistently. A training-time limit, if added, should return `truncated=True`, not a successful termination.
+### Conclusion
 
-### Results — fill after running
+Reward shaping alone, at the settings actually executed, did not prevent boundary-stalling in the deterministic evaluation. Do not claim this version succeeded without a multi-episode evaluation.
 
-- Date: `TBD`
-- Git commit: `TBD`
-- Training seed: `TBD`
-- Timesteps actually trained: `TBD`
-- Capture rate (100 episodes): `TBD`
-- Mean steps to capture: `TBD`
-- Mean episode return: `TBD`
-- Observed failure modes: `TBD`
-- Model: `TBD`
-- Episode video: `TBD`
-- Training timelapse: `TBD`
-- Conclusion: `TBD`
+---
+
+## v0.3 — Proposed: finite episodes and systematic evaluation
+
+**Status:** Planned; not implemented or tested.
+
+### Problem
+
+The current environment can continue an episode indefinitely when no capture occurs. A deterministic policy can repeatedly choose a blocked action at a boundary and receive an unchanged observation forever. A 500-step cap in the post-training test or video recorder does **not** itself constrain the episodes used during PPO training.
+
+### Proposed changes
+
+1. **Limit training episodes** to a documented maximum (initial proposal: `100` steps), e.g. with `gymnasium.wrappers.TimeLimit`. Reaching the limit must set `truncated=True`; catching the rabbit must set `terminated=True`.
+2. **Keep random rabbit positions** during training and evaluation; keep the rabbit stationary during each episode. Verify that `video_recorder.py` gets the same environment settings.
+3. **Record exact training duration and machine** using the protocol above, plus the effective steps, algorithm device, and seed.
+4. **Evaluate at least 100 seeded episodes** with `deterministic=True`, reporting capture rate, mean successful capture length, mean return, and boundary-stall incidence.
+5. **If the baseline still fails**, test increased timesteps (e.g., `100,000`) and/or a modified reward policy as *separate documented experiments* so individual effects can be assessed.
+
+### Results — fill after executing
+
+| Field | Result |
+| --- | --- |
+| Date and Git commit | TBD |
+| Machine | `A` / `B` (TBD) |
+| Training time (`model.learn()`) | TBD |
+| Training device | TBD |
+| Training seed(s) | TBD |
+| Requested / effective timesteps | TBD |
+| Maximum episode length | TBD |
+| Evaluation episodes / seed(s) | TBD |
+| Capture rate | TBD |
+| Mean successful capture steps | TBD |
+| Mean episode return | TBD |
+| Boundary-stall failures | TBD |
+| Model / episode video / timelapse | TBD |
+| Conclusion | TBD |
 
 ---
 
 ## Naming and reproducibility conventions
 
-- `VERSION` names the experiment, **not** the number of times a script has run.
-- Prefer one versioned model and one video of each type per experiment:
-  - `nina_logs/models/nina_ppo_model_vX.Y.zip`
-  - `nina_logs/videos/nina_learning_vX.Y.mp4`
-  - `nina_logs/videos/nina_training_timelapse_vX.Y.mp4`
-- Re-running a version with identical output paths **overwrites its artifacts**. Change `VERSION` before intentionally preserving a new experiment.
-- For filenames where `v0.2` is part of the stem, **do not** use `Path.with_suffix('.mp4')` on `nina_learning_v0.2`: it interprets `.2` as a suffix. Append `.mp4` directly instead.
-- Record source commit, environment configuration, seed, total training steps, hyperparameters, and evaluation results.
-- A single successful video is a demonstration; **capture rate across multiple episodes** is the performance measure.
-- Keep evaluation conditions aligned with training conditions unless testing out-of-distribution generalization deliberately.
+- `VERSION` names a configuration/experiment, **not** a counter for re-running a script.
+- Use `nina_logs/models/nina_ppo_model_vX.Y.zip` for saved PPO models.
+- Use `nina_logs/videos/nina_learning_vX.Y.mp4` for evaluation video.
+- Use `nina_logs/videos/nina_training_timelapse_vX.Y.mp4` for training timelapse.
+- Re-running the same version with the same output paths can overwrite existing artifacts. Use a separate run ID or seed suffix to preserve distinct repetitions.
+- Build a video filename by appending `.mp4` to the whole name, not `Path.with_suffix('.mp4')` on a name ending in `v0.2`.
+- Preserve the source commit, environment settings, random seed, PPO hyperparameters, Python/library versions, machine identifier, device, exact effective timesteps, duration, and evaluation protocol.
+- A single video is a demonstration. A multi-episode capture rate is a performance metric.
 
 ---
 
-## Template — copy for every future change
+## Template — copy for each future experiment
 
 ```markdown
-## vX.Y — Short experiment title
+## vX.Y — Experiment title
 
-**Status:** Proposed / Implemented / Evaluated  
-**Date:** YYYY-MM-DD  
-**Git commit:** `<hash>`
+**Status:** Planned / Implemented / Evaluated
+**Date:** YYYY-MM-DD
+**Git commit:** `<commit>`
 
-### Problem
+### Problem and hypothesis
+- Problem: ...
+- Hypothesis: ...
 
-What failed or what question remains unanswered?
+### Change
+- Files: ...
+- Before / after: ...
+- Unchanged controls: ...
 
-### Hypothesis
-
-What specific improvement do we expect, and why?
-
-### Changes
-
-- **Files:** `path/to/file.py`
-- **Before:** ...
-- **After:** ...
-- **Unchanged controls:** ...
-
-### Training configuration
-
-- Algorithm / policy: ...
-- Seed(s): ...
-- Timesteps: ...
-- Hyperparameters: ...
-- Environment settings: ...
+### Training setup
+| Field | Value |
+| --- | --- |
+| Machine | A / B |
+| CPU / GPU / RAM | See machine registry |
+| PPO device | CPU / CUDA |
+| Python / Torch / SB3 | ... |
+| Seed | ... |
+| Requested / effective timesteps | ... |
+| Hyperparameters | ... |
+| Environment and episode limit | ... |
+| Training time (includes callbacks) | ... |
 
 ### Evaluation
-
-- Number of episodes: ...
+- Number of seeded episodes: ...
 - Capture rate: ...
-- Mean steps to capture: ...
-- Mean episode return: ...
-- Failure cases: ...
+- Mean steps on successful episodes: ...
+- Mean return: ...
+- Boundary-stall cases: ...
 
 ### Artifacts
-
 - Model: ...
 - Evaluation video: ...
 - Training timelapse: ...
 
-### Conclusion / Next question
-
-What did the evidence show? What should be changed or tested next?
+### Conclusion and next question
+...
 ```

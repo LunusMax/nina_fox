@@ -42,6 +42,7 @@ RANDOM_START = False         # If True, Nina and rabbit start in random position
 RANDOM_RABBIT_START = False  # Randomize only rabbit's starting position
 STEP_PENALTY = -0.01         # Small penalty for each move
 CATCH_REWARD = 1.0           # Reward for catching the rabbit
+MAX_EPISODE_STEPS = 100
 
 
 # ============================================================
@@ -61,6 +62,7 @@ class CubeHuntEnv(gym.Env):
         self.render_mode = render_mode
         self.random_start = random_start
         self.random_rabbit_start = random_rabbit_start
+        self.episode_steps = 0
         # === Define Action and Observation Spaces ===
         self.action_space = spaces.Discrete(4)  # 0=up, 1=right, 2=down, 3=left
         low = np.array([0, 0, 0, 0], dtype=np.int32)
@@ -111,6 +113,7 @@ class CubeHuntEnv(gym.Env):
     def reset(self, seed=None, options=None):
         """Reset Nina and the rabbit to their starting positions."""
         super().reset(seed=seed)
+        self.episode_steps = 0
 
         # === Nina's Starting Position ===
         if self.random_start:
@@ -191,9 +194,14 @@ class CubeHuntEnv(gym.Env):
             self.fox_pos,
             self.rabbit_pos
         ])
+        
+        self.episode_steps += 1
 
         terminated = bool(caught)
-        truncated = False
+        truncated = (
+            not terminated
+            and self.episode_steps >= MAX_EPISODE_STEPS
+        )
 
         return obs, reward, terminated, truncated, {}
 
