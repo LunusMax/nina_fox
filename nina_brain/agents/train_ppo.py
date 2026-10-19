@@ -57,12 +57,6 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.monitor import Monitor
 
-# Utilities
-try:
-    from utils.video_recorder import record_episode
-except Exception:
-    record_episode = None
-
 try:
     from utils.training_recorder_callback import TrainingRecorderCallback
 except Exception:
@@ -108,6 +102,7 @@ RABBIT_POS = [GRID_SIZE - 1, GRID_SIZE - 1]
 # === Training Routine
 # ============================================================
 
+from nina_brain.video_recorder import record_episode
 from envs.cube_hunt_env import CubeHuntEnv
 
 if __name__ == "__main__":
@@ -146,20 +141,36 @@ if __name__ == "__main__":
 
     # === Test trained agent ===
     obs, _ = env.reset()
-    done = False
-    while not done:
+    MAX_TEST_STEPS = 500
+
+    for step in range(MAX_TEST_STEPS):
         action, _ = model.predict(obs, deterministic=True)
-        obs, reward, done, _, _ = env.step(action)
+
+        obs, reward, terminated, truncated, _ = env.step(action)
+
         if RENDER_DURING_TEST:
             env.render()
+
+        if terminated:
+            print(f"🦊 Nina caught the rabbit in {step + 1} steps!")
+            break
+
+        if truncated:
+            print("⏱️ Evaluation episode truncated.")
+            break
+    else:
+        print("⚠️ Nina did not catch the rabbit within the step limit.")
 
     # === Save trained model ===
     model_dir = "nina_logs/models"
     os.makedirs(model_dir, exist_ok=True)
-    model.save(os.path.join(model_dir, f"nina_ppo_model_{VERSION}"))
-    
+
+    model_path = os.path.join(
+        model_dir,
+        f"nina_ppo_model_{VERSION}"
+    )
+
     model.save(model_path)
-    
     print(f"💾 Model saved in {model_path}.zip")
 
     # === Record single evaluation episode (optional) ===
@@ -172,3 +183,4 @@ if __name__ == "__main__":
             print(f"⚠️ Could not record video: {e}")
 
     print("✅ Training complete.")
+    env.close()
