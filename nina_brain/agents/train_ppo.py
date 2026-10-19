@@ -21,7 +21,7 @@ N_STEPS = 256               # PPO rollout length
 BATCH_SIZE = 64             # PPO batch size
 GAMMA = 0.99                # Discount factor
 
-VERSION = "v0.2"
+VERSION = "v0.2.1"
 
 RENDER_DURING_TEST = True   # If True, renders Nina after training
 SAVE_VIDEO = True            # Record a single evaluation episode after training
@@ -167,12 +167,11 @@ if __name__ == "__main__":
 
     model_path = os.path.join(
         model_dir,
-        f"nina_ppo_model_{VERSION}"
+        f"nina_ppo_model_{VERSION}.zip"
     )
 
     model.save(model_path)
-    print(f"💾 Model saved in {model_path}.zip")
-
+    print(f"💾 Model saved in {model_path}")
     # === Record single evaluation episode (optional) ===
     if SAVE_VIDEO and record_episode is not None:
         video_dir = "nina_logs/videos"

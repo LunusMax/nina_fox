@@ -142,25 +142,60 @@ class CubeHuntEnv(gym.Env):
 
 
     def step(self, action):
-        """Execute one action in the environment and return the new state."""
-        
+        """Execute one action and calculate distance-based rewards."""
+
+        # === Distance Before Movement ===
+        old_distance = np.abs(
+            self.fox_pos - self.rabbit_pos
+        ).sum()
+
         # === Move Nina ===
         if action == 0:      # Up
             self.fox_pos[1] = max(0, self.fox_pos[1] - 1)
+
         elif action == 1:    # Right
-            self.fox_pos[0] = min(self.grid_size - 1, self.fox_pos[0] + 1)
+            self.fox_pos[0] = min(
+                self.grid_size - 1, self.fox_pos[0] + 1
+            )
+
         elif action == 2:    # Down
-            self.fox_pos[1] = min(self.grid_size - 1, self.fox_pos[1] + 1)
+            self.fox_pos[1] = min(
+                self.grid_size - 1, self.fox_pos[1] + 1
+            )
+
         elif action == 3:    # Left
             self.fox_pos[0] = max(0, self.fox_pos[0] - 1)
 
-        # === Reward Calculation ===
-        caught = np.array_equal(self.fox_pos, self.rabbit_pos)
-        reward = CATCH_REWARD if caught else STEP_PENALTY
-        obs = np.concatenate([self.fox_pos, self.rabbit_pos])
-        done = bool(caught)
+        # === Distance After Movement ===
+        new_distance = np.abs(
+            self.fox_pos - self.rabbit_pos
+        ).sum()
 
-        return obs, reward, done, False, {}
+        # === Reward Calculation ===
+        caught = np.array_equal(
+            self.fox_pos, self.rabbit_pos
+        )
+
+        if caught:
+            reward = CATCH_REWARD
+        else:
+            distance_improvement = old_distance - new_distance
+
+            reward = (
+                STEP_PENALTY
+                + 0.02 * distance_improvement
+            )
+
+        # === Observation ===
+        obs = np.concatenate([
+            self.fox_pos,
+            self.rabbit_pos
+        ])
+
+        terminated = bool(caught)
+        truncated = False
+
+        return obs, reward, terminated, truncated, {}
 
 
     def render(self):
