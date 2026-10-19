@@ -102,7 +102,7 @@ RABBIT_POS = [GRID_SIZE - 1, GRID_SIZE - 1]
 # === Training Routine
 # ============================================================
 
-from nina_brain.video_recorder import record_episode
+from utils.video_recorder import record_episode
 from envs.cube_hunt_env import CubeHuntEnv
 
 if __name__ == "__main__":
