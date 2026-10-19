@@ -53,10 +53,10 @@ This document records **what changed, why it changed, and what the experiment ac
 
 | Version | Machine | Training time | Device used by PPO | Measurement notes |
 | --- | --- | --- | --- | --- |
-| `v0.1` | Not recorded | Not recorded | Not recorded | Historical run; do not estimate retrospectively. |
-| `v0.2` | Not recorded | Not recorded | Not recorded | Historical run; do not estimate retrospectively. |
-| `v0.2.1` | Not recorded | Not recorded | Not recorded | Run finished, but wall-clock duration was not measured. |
-| `v0.3` | TBD (`A` or `B`) | TBD | TBD | Start automatic measurement here. |
+| `v0.1` | `B` | Not recorded | Not recorded | Historical run; duration was not measured. |
+| `v0.2` | `B` | Not recorded | Not recorded | Historical run; duration was not measured. |
+| `v0.2.1` | `B` | Not recorded | Not recorded | Historical run; duration was not measured. |
+| `v0.3` | `B` | 00:33:31 | CUDA (RTX 5060) | 100,096 timesteps; includes training timelapse generation (10,009 frames). |
 
 **Timing protocol:** measure the wall-clock duration of `model.learn()` using `time.perf_counter()`. This includes training callbacks, rendering/capture overhead, and saving the timelapse in `_on_training_end()`. It **does not** include the later test, model save, or evaluation video. Record the exact code commit, requested timesteps, effective timesteps (`model.num_timesteps`), chosen machine (`A`/`B`), PPO device, and random seed for each run. Durations measured on different machines should **not** be used to claim algorithmic speed improvements without a controlled benchmark.
 
