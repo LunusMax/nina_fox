@@ -17,8 +17,7 @@ __pycache__/
 
 # --- Logs and temporary files ---
 *.log
-nina_logs/videos/
-nina_logs/models/
+nina_logs/
 *.mp4
 
 # --- OS / Editor files ---
