@@ -7,7 +7,7 @@ from envs.cube_hunt_env import CubeHuntEnv
 def main():
     """Preview the environment using random actions."""
 
-    env = CubeHuntEnv(render_mode="human", random_start=True)
+    env = CubeHuntEnv(render_mode="human", random_start=True, random_rabbit_start=True, random_lake=True,)
     obs, info = env.reset()
 
     try:

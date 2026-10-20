@@ -20,6 +20,7 @@ import numpy as np
 import pygame
 import gymnasium as gym
 from gymnasium import spaces
+from collections import deque
 
 import os
 import sys
@@ -44,6 +45,11 @@ STEP_PENALTY = -0.01         # Small penalty for each move
 CATCH_REWARD = 1.0           # Reward for catching the rabbit
 MAX_EPISODE_STEPS = 100
 
+RANDOM_LAKE = False
+LAKE_COLOR = (45, 130, 195)
+LAKE_MIN_CELLS = 6
+LAKE_MAX_CELLS = 14
+
 
 # ============================================================
 # === Environment Definition
@@ -54,7 +60,7 @@ class CubeHuntEnv(gym.Env):
     
     metadata = {"render_modes": ["human"], "render_fps": FPS}
 
-    def __init__(self, grid_size=GRID_SIZE, render_mode="human", random_start=RANDOM_START, random_rabbit_start=RANDOM_RABBIT_START,):
+    def __init__(self, grid_size=GRID_SIZE, render_mode="human", random_start=RANDOM_START, random_rabbit_start=RANDOM_RABBIT_START, random_lake=RANDOM_LAKE,):
         """Initialize the environment."""
         super().__init__()
 
@@ -62,6 +68,8 @@ class CubeHuntEnv(gym.Env):
         self.render_mode = render_mode
         self.random_start = random_start
         self.random_rabbit_start = random_rabbit_start
+        self.random_lake = random_lake
+        self.lake_cells = set()
         self.episode_steps = 0
         # === Define Action and Observation Spaces ===
         self.action_space = spaces.Discrete(4)  # 0=up, 1=right, 2=down, 3=left
@@ -110,37 +118,184 @@ class CubeHuntEnv(gym.Env):
         return sprite
 
 
+    def _land_is_connected(self, lake_cells):
+        """Check whether every land cell is reachable."""
+
+        start = (0, 0)
+        visited = {start}
+        queue = deque([start])
+
+        directions = [
+            (0, -1),
+            (1, 0),
+            (0, 1),
+            (-1, 0),
+        ]
+
+        while queue:
+            x, y = queue.popleft()
+
+            for dx, dy in directions:
+                neighbor = (x + dx, y + dy)
+                nx, ny = neighbor
+
+                if not (0 <= nx < self.grid_size):
+                    continue
+
+                if not (0 <= ny < self.grid_size):
+                    continue
+
+                if neighbor in lake_cells or neighbor in visited:
+                    continue
+
+                visited.add(neighbor)
+                queue.append(neighbor)
+
+        total_land = self.grid_size**2 - len(lake_cells)
+
+        return len(visited) == total_land
+
+
+    def _generate_lake(self):
+        """Generate a connected random lake without isolating land."""
+
+        n = self.grid_size
+
+        if n < 4:
+            raise ValueError("Random lakes require grid_size >= 4.")
+
+        directions = [
+            (0, -1),
+            (1, 0),
+            (0, 1),
+            (-1, 0),
+        ]
+
+        # Protect the fixed starting positions.
+        protected = {
+            (0, 0),
+            (n - 1, n - 1),
+        }
+
+        max_size = min(LAKE_MAX_CELLS, n * n - len(protected))
+        min_size = min(LAKE_MIN_CELLS, max_size)
+
+        target_size = int(
+            self.np_random.integers(min_size, max_size + 1)
+        )
+
+        for _ in range(100):
+            # Start somewhere inside the grid.
+            start = (
+                int(self.np_random.integers(1, n - 1)),
+                int(self.np_random.integers(1, n - 1)),
+            )
+
+            lake = {start}
+
+            # Grow the lake through adjacent cells.
+            while len(lake) < target_size:
+                candidates = set()
+
+                for x, y in lake:
+                    for dx, dy in directions:
+                        neighbor = (x + dx, y + dy)
+                        nx, ny = neighbor
+
+                        if not (0 <= nx < n and 0 <= ny < n):
+                            continue
+
+                        if neighbor in lake or neighbor in protected:
+                            continue
+
+                        candidates.add(neighbor)
+
+                if not candidates:
+                    break
+
+                # Sorting preserves reproducibility with a fixed seed.
+                candidates = sorted(candidates)
+
+                index = int(
+                    self.np_random.integers(len(candidates))
+                )
+
+                lake.add(candidates[index])
+
+            # Accept only valid, navigable maps.
+            if (
+                len(lake) == target_size
+                and self._land_is_connected(lake)
+            ):
+                return lake
+
+        raise RuntimeError("Could not generate a valid lake.")
+
+
     def reset(self, seed=None, options=None):
-        """Reset Nina and the rabbit to their starting positions."""
+        """Reset the environment and optionally generate a new lake."""
         super().reset(seed=seed)
+
         self.episode_steps = 0
+
+        # === Generate Lake ===
+        self.lake_cells = (
+            self._generate_lake()
+            if self.random_lake
+            else set()
+        )
+
+        # === Available Land Positions ===
+        land_positions = [
+            (x, y)
+            for y in range(self.grid_size)
+            for x in range(self.grid_size)
+            if (x, y) not in self.lake_cells
+        ]
 
         # === Nina's Starting Position ===
         if self.random_start:
-            self.fox_pos = self.np_random.integers(
-                0, self.grid_size, size=2, dtype=np.int32
+            index = int(
+                self.np_random.integers(len(land_positions))
+            )
+
+            self.fox_pos = np.array(
+                land_positions[index],
+                dtype=np.int32
             )
         else:
-            self.fox_pos = np.array([0, 0], dtype=np.int32)
+            self.fox_pos = np.array(
+                [0, 0],
+                dtype=np.int32
+            )
 
         # === Rabbit's Starting Position ===
         if self.random_start or self.random_rabbit_start:
-            self.rabbit_pos = self.np_random.integers(
-                0, self.grid_size, size=2, dtype=np.int32
+            available = [
+                position
+                for position in land_positions
+                if position != tuple(self.fox_pos)
+            ]
+
+            index = int(
+                self.np_random.integers(len(available))
             )
 
-            # Nina and the rabbit cannot start in the same cell
-            while np.array_equal(self.fox_pos, self.rabbit_pos):
-                self.rabbit_pos = self.np_random.integers(
-                    0, self.grid_size, size=2, dtype=np.int32
-                )
+            self.rabbit_pos = np.array(
+                available[index],
+                dtype=np.int32
+            )
         else:
             self.rabbit_pos = np.array(
                 [self.grid_size - 1, self.grid_size - 1],
                 dtype=np.int32
             )
 
-        obs = np.concatenate([self.fox_pos, self.rabbit_pos])
+        obs = np.concatenate([
+            self.fox_pos,
+            self.rabbit_pos
+        ])
+
         return obs, {}
 
 
@@ -171,6 +326,12 @@ class CubeHuntEnv(gym.Env):
 
         elif action == 3:    # Left
             self.fox_pos[0] = max(0, self.fox_pos[0] - 1)
+
+
+        # === Lake Collision ===
+        if tuple(self.fox_pos) in self.lake_cells:
+            self.fox_pos = old_pos.copy()
+
 
         # === Distance After Movement ===
         new_distance = np.abs(
@@ -222,6 +383,19 @@ class CubeHuntEnv(gym.Env):
     def render(self):
         """Render the current state of the environment."""
         self.screen.fill(BG_COLOR)
+
+        # === Draw Lake ===
+        for x, y in self.lake_cells:
+            pygame.draw.rect(
+                self.screen,
+                LAKE_COLOR,
+                (
+                    x * self.cell_size,
+                    y * self.cell_size,
+                    self.cell_size,
+                    self.cell_size,
+                ),
+            )
 
         # === Draw Grid ===
         for x in range(0, self.window_size + 1, self.cell_size):
