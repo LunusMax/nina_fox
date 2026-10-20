@@ -21,7 +21,7 @@ N_STEPS = 256               # PPO rollout length
 BATCH_SIZE = 64             # PPO batch size
 GAMMA = 0.99                # Discount factor
 
-VERSION = "v0.3"
+VERSION = "v0.4"
 
 RENDER_DURING_TEST = True   # If True, renders Nina after training
 SAVE_VIDEO = True            # Record a single evaluation episode after training
@@ -109,7 +109,7 @@ from envs.cube_hunt_env import CubeHuntEnv
 
 if __name__ == "__main__":
     # === Create environment and monitor ===
-    env = CubeHuntEnv(grid_size=GRID_SIZE, random_start=False, random_rabbit_start=True,)
+    env = CubeHuntEnv(grid_size=GRID_SIZE, random_start=False, random_rabbit_start=True, random_lake=True,)
     env = Monitor(env)  # Wrap environment to log episode stats
 
     # === Initialize PPO model ===
@@ -195,7 +195,7 @@ if __name__ == "__main__":
         video_dir = "nina_logs/videos"
         os.makedirs(video_dir, exist_ok=True)
         try:
-            record_episode(model, filename_base=os.path.join(video_dir, f"nina_learning_{VERSION}"), random_rabbit_start=True,)
+            record_episode(model, filename_base=os.path.join(video_dir, f"nina_learning_{VERSION}"), random_rabbit_start=True, random_lake=True,)
         except Exception as e:
             print(f"⚠️ Could not record video: {e}")
 

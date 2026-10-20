@@ -36,6 +36,7 @@ def record_episode(
     max_steps: int = MAX_STEPS,
     random_start: bool = False,
     random_rabbit_start: bool = False,
+    random_lake: bool = False,
 ):
     """
     Records one episode of Nina chasing the rabbit.
@@ -55,6 +56,7 @@ def record_episode(
         grid_size=GRID_SIZE,
         random_start=random_start,
         random_rabbit_start=random_rabbit_start,
+        random_lake=random_lake,
     )
 
     frames = []
