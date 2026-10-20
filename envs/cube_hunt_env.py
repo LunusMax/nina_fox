@@ -71,11 +71,37 @@ class CubeHuntEnv(gym.Env):
         self.random_lake = random_lake
         self.lake_cells = set()
         self.episode_steps = 0
+
         # === Define Action and Observation Spaces ===
         self.action_space = spaces.Discrete(4)  # 0=up, 1=right, 2=down, 3=left
-        low = np.array([0, 0, 0, 0], dtype=np.int32)
-        high = np.array([grid_size - 1, grid_size - 1, grid_size - 1, grid_size - 1], dtype=np.int32)
-        self.observation_space = spaces.Box(low=low, high=high, dtype=np.int32)
+
+        # === Observation Space ===
+        position_low = np.zeros(4, dtype=np.int32)
+        position_high = np.full(
+            4, grid_size - 1, dtype=np.int32
+        )
+
+        if self.random_lake:
+            # Add one binary value for each grid cell
+            lake_low = np.zeros(
+                grid_size * grid_size, dtype=np.int32
+            )
+            lake_high = np.ones(
+                grid_size * grid_size, dtype=np.int32
+            )
+
+            low = np.concatenate([position_low, lake_low])
+            high = np.concatenate([position_high, lake_high])
+        else:
+            # Preserve compatibility with previous experiments
+            low = position_low
+            high = position_high
+
+        self.observation_space = spaces.Box(
+            low=low,
+            high=high,
+            dtype=np.int32
+        )
 
         # === Initialize Pygame ===
         pygame.init()
@@ -116,6 +142,36 @@ class CubeHuntEnv(gym.Env):
         sprite = pygame.transform.scale(sprite, size)
 
         return sprite
+
+
+    def _get_obs(self):
+        """Build the observation vector for the current state."""
+
+        # === Agent and Target Positions ===
+        positions = np.concatenate([
+            self.fox_pos,
+            self.rabbit_pos
+        ]).astype(np.int32)
+
+        if not self.random_lake:
+            return positions
+
+        # === Binary Lake Map ===
+        lake_map = np.zeros(
+            (self.grid_size, self.grid_size),
+            dtype=np.int32
+        )
+
+        for x, y in self.lake_cells:
+            lake_map[y, x] = 1
+
+        # === Complete Observation ===
+        obs = np.concatenate([
+            positions,
+            lake_map.flatten()
+        ])
+
+        return obs
 
 
     def _land_is_connected(self, lake_cells):
@@ -291,10 +347,7 @@ class CubeHuntEnv(gym.Env):
                 dtype=np.int32
             )
 
-        obs = np.concatenate([
-            self.fox_pos,
-            self.rabbit_pos
-        ])
+        obs = self._get_obs()
 
         return obs, {}
 
@@ -364,10 +417,7 @@ class CubeHuntEnv(gym.Env):
             )
             
         # === Observation ===
-        obs = np.concatenate([
-            self.fox_pos,
-            self.rabbit_pos
-        ])
+        obs = self._get_obs()
 
         self.episode_steps += 1
 
