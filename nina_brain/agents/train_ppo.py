@@ -49,6 +49,8 @@ import sys
 # === Ensure project root (nina_fox) is visible to Python ===
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
+from utils.report_generator import save_training_metadata
+
 # Environment and rendering
 import gymnasium as gym
 from gymnasium import spaces
@@ -148,6 +150,13 @@ if __name__ == "__main__":
 
     hours, remainder = divmod(int(training_seconds), 3600)
     minutes, seconds = divmod(remainder, 60)
+
+    save_training_metadata(
+        model,
+        duration_seconds=training_seconds,
+        version=VERSION,
+        machine=MACHINE_ID,
+    )
 
     print(
         f"⏱️ Training duration: "

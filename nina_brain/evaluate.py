@@ -20,6 +20,8 @@ from collections import deque
 
 from envs.cube_hunt_env import CubeHuntEnv
 
+from utils.report_generator import generate_report
+
 
 # ============================================================
 # === Editable Parameters
@@ -329,6 +331,9 @@ def main():
 
     output_path = save_results(version, results)
     print(f"\n✅ Results saved to: {output_path}")
+
+    report_path = generate_report()
+    print(f"📄 Report saved: {report_path}")
 
 
 if __name__ == "__main__":
