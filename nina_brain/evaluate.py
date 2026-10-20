@@ -16,6 +16,8 @@ from pathlib import Path
 import numpy as np
 from stable_baselines3 import PPO
 
+from collections import deque
+
 from envs.cube_hunt_env import CubeHuntEnv
 
 
@@ -28,6 +30,8 @@ MAX_EVALUATION_STEPS = 100
 
 MODEL_DIR = Path("nina_logs/models")
 OUTPUT_DIR = Path("nina_logs/evaluations")
+
+LAKE_EVALUATION_SEEDS = range(42, 52)  # 10 reproducible lakes
 
 # ============================================================
 # === Experiment Version
@@ -84,79 +88,154 @@ def load_model(version):
     )
 
 
+def shortest_path_distances(grid_size, obstacles):
+    """Calculate shortest distances from (0, 0) using BFS."""
+
+    start = (0, 0)
+    distances = {start: 0}
+    queue = deque([start])
+
+    directions = [
+        (0, -1),
+        (1, 0),
+        (0, 1),
+        (-1, 0),
+    ]
+
+    while queue:
+        x, y = queue.popleft()
+
+        for dx, dy in directions:
+            neighbor = (x + dx, y + dy)
+            nx, ny = neighbor
+
+            if not (0 <= nx < grid_size and 0 <= ny < grid_size):
+                continue
+
+            if neighbor in obstacles or neighbor in distances:
+                continue
+
+            distances[neighbor] = distances[(x, y)] + 1
+            queue.append(neighbor)
+
+    return distances
+
 # ============================================================
 # === Evaluation
 # ============================================================
 
 def evaluate(model, grid_size=GRID_SIZE):
-    """Evaluate all possible rabbit positions."""
+    """Evaluate the agent across valid environments and targets."""
+
+    # === Detect Environment Type ===
+    observation_size = model.observation_space.shape[0]
+
+    if observation_size == 4:
+        use_lake = False
+    elif observation_size == 4 + grid_size * grid_size:
+        use_lake = True
+    else:
+        raise ValueError(
+            f"Unsupported observation size: {observation_size}"
+        )
+
+    # === Evaluation Configuration ===
+    seeds = LAKE_EVALUATION_SEEDS if use_lake else [42]
 
     env = CubeHuntEnv(
         grid_size=grid_size,
         render_mode=None,
         random_start=False,
-        random_rabbit_start=False,
+        random_rabbit_start=True,
+        random_lake=use_lake,
     )
 
     results = []
 
     try:
-        for y in range(grid_size):
-            for x in range(grid_size):
+        for seed in seeds:
 
-                if (x, y) == (0, 0):
-                    continue
+            # === Generate Reproducible Environment ===
+            env.reset(seed=seed)
+            lake_cells = set(env.lake_cells)
 
-                obs, _ = env.reset()
+            # === Calculate Optimal Paths ===
+            distances = shortest_path_distances(
+                grid_size,
+                lake_cells,
+            )
 
-                # Set a deterministic evaluation target
-                env.rabbit_pos = np.array(
-                    [x, y], dtype=np.int32
-                )
+            # === Evaluate Every Valid Rabbit Position ===
+            for y in range(grid_size):
+                for x in range(grid_size):
 
-                obs = np.concatenate([
-                    env.fox_pos,
-                    env.rabbit_pos,
-                ])
+                    target = (x, y)
 
-                blocked_moves = 0
-                success = False
+                    if target == (0, 0) or target in lake_cells:
+                        continue
 
-                for step in range(1, MAX_EVALUATION_STEPS + 1):
-                    previous_pos = env.fox_pos.copy()
+                    # Recreate the same lake for this target
+                    obs, _ = env.reset(seed=seed)
 
-                    action, _ = model.predict(
-                        obs,
-                        deterministic=True,
+                    # Position the rabbit manually
+                    env.rabbit_pos = np.array(
+                        target,
+                        dtype=np.int32,
                     )
 
-                    obs, reward, terminated, truncated, _ = env.step(
-                        int(action)
-                    )
+                    obs = env._get_obs()
 
-                    if np.array_equal(previous_pos, env.fox_pos):
-                        blocked_moves += 1
+                    assert env.observation_space.contains(obs)
 
-                    if terminated:
-                        success = True
+                    blocked_moves = 0
+                    success = False
+                    steps = 0
 
-                    if terminated or truncated:
-                        break
+                    # === Run Deterministic Policy ===
+                    for step in range(
+                        1,
+                        MAX_EVALUATION_STEPS + 1,
+                    ):
+                        steps = step
+                        previous_pos = env.fox_pos.copy()
 
-                # Optimal distance for an obstacle-free grid
-                optimal_steps = x + y
+                        action, _ = model.predict(
+                            obs,
+                            deterministic=True,
+                        )
 
-                results.append({
-                    "rabbit_x": x,
-                    "rabbit_y": y,
-                    "success": success,
-                    "steps": step,
-                    "optimal_steps": optimal_steps,
-                    "extra_steps": (
-                        step - optimal_steps if success else ""
-                    ),
-                    "blocked_moves": blocked_moves,
-                })
+                        obs, reward, terminated, truncated, _ = (
+                            env.step(int(action))
+                        )
+
+                        if np.array_equal(
+                            previous_pos,
+                            env.fox_pos,
+                        ):
+                            blocked_moves += 1
+
+                        if terminated:
+                            success = True
+
+                        if terminated or truncated:
+                            break
+
+                    # === Evaluation Metrics ===
+                    optimal_steps = distances[target]
+
+                    results.append({
+                        "lake_seed": seed if use_lake else "",
+                        "lake_cells": len(lake_cells),
+                        "rabbit_x": x,
+                        "rabbit_y": y,
+                        "success": success,
+                        "steps": steps,
+                        "optimal_steps": optimal_steps,
+                        "extra_steps": (
+                            steps - optimal_steps if success else ""
+                        ),
+                        "blocked_moves": blocked_moves,
+                    })
 
     finally:
         env.close()
@@ -216,7 +295,7 @@ def print_summary(version, results):
 
     print("\n========== NINA EVALUATION ==========")
     print(f"Version: {version}")
-    print(f"Evaluated positions: {total}")
+    print(f"Evaluated scenarios: {total}")
     print(f"Successful captures: {len(successful)}")
     print(f"Failed captures: {len(failed)}")
     print(f"Success rate: {success_rate:.2f}%")
